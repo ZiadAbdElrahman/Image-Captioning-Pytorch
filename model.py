@@ -11,16 +11,18 @@ class Encoder(nn.Module):
         # model = list(resnet.children())[:-1]
         #
         # self.resnet = nn.sequential(*model)
-
+        self.bn1 = nn.BatchNorm1d(512,  momentum=0.01)
         self.linear = nn.Linear(512, embed_size)
-        self.bn = nn.BatchNorm1d(embed_size,  momentum=0.01)
+        self.bn2 = nn.BatchNorm1d(embed_size,  momentum=0.01)
 
     def forward(self, image):
         # with torch.no_grad():
         #     feature = self.resnet(image)
 
         # feature = feature.reshape(feature.size(0), -1)
+        image = (self.bn1(image))
         feature = (self.linear(image))
+        feature = (self.bn2(feature))
 
         return feature
 
@@ -36,8 +38,10 @@ class Decoder(nn.Module):
         self.max_seg_length = max_seq_length
 
     def forward(self, feature, captions, lengths):
+
         embeddings = self.embed(captions)
         embeddings = torch.cat((feature.unsqueeze(1), embeddings), 1)
+
         packed = pack_padded_sequence(embeddings, lengths, batch_first=True, enforce_sorted=False)
 
         hiddens, _ = self.lstm(packed)
@@ -46,21 +50,19 @@ class Decoder(nn.Module):
 
         return output
 
-    def sample(self, feature, start):
+    def sample(self, feature, states):
         sampled_ids = []
 
-
-        states = start
         inputs = feature.unsqueeze(1)
+
         for i in range(self.max_seg_length):
-            hiddens, states = self.lstm(inputs, states)  # hiddens: (batch_size, 1, hidden_size)
-            outputs = self.linear(hiddens.squeeze(1))  # outputs:  (batch_size, vocab_size)
-            _, predicted = outputs.max(1)  # predicted: (batch_size)
+            hiddens, states = self.lstm(inputs, states)
+            outputs = self.linear(hiddens.squeeze(1))
+            _, predicted = outputs.max(1)
             sampled_ids.append(predicted)
-            inputs = self.embed(predicted)  # inputs: (batch_size, embed_size)
-            inputs = inputs.unsqueeze(1)  # inputs: (batch_size, 1, embed_size)
+            inputs = self.embed(predicted)
+            inputs = inputs.unsqueeze(1)
 
-
-        sampled_ids = torch.stack(sampled_ids, 1)  # sampled_ids: (batch_size, max_seq_length)
+        sampled_ids = torch.stack(sampled_ids, 1)
         return sampled_ids
 

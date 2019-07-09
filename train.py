@@ -1,27 +1,31 @@
-import argparse
 import torch
-from torch import nn
+import random
+import argparse
 import numpy as np
+from torch import nn
 from sample import Sample
 from DataLoader import DataLoader
 from model import Encoder, Decoder
+from util import save_weights, idx_to_sentence, load_weights
 from torch.nn.utils.rnn import pack_padded_sequence
-from util import save_weights, idx_to_sentence
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 Data = DataLoader()
-Train_captions, Train_images, Train_feature, Train_lengths, img = Data.get_Training_data()
+Train_captions, Train_images, Train_feature, Train_lengths = Data.get_Training_data()
 Test_captions, Test_images, Test_feature, Test_lengths = Data.get_val_data()
 
 
 def main(args):
+    # writer = SummaryWriter()
+
     encoder = Encoder(args.embed_size).to(device)
     decoder = Decoder(args.embed_size, args.hidden_size, len(Data.word_to_idx), args.num_layers).to(device)
 
     criterion = nn.CrossEntropyLoss()
 
-    params = list(decoder.parameters()) + list(encoder.parameters())
+    params = list(decoder.linear.parameters()) + list(encoder.parameters())
     optimizer = torch.optim.Adam(params, lr=args.learning_rate, weight_decay=args.rg)
 
     for epoch in range(args.num_epochs):
@@ -31,21 +35,33 @@ def main(args):
         print('Epoch [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}, TestLoss: {:.4f}, TestPerplexity: {:5.4f}'
               .format(epoch + 1, args.num_epochs, avgTrainLoss,
                       np.exp(avgTrainLoss), avgTestLoss, np.exp(avgTestLoss)))
+        # writer.add_scalar('Train/Loss', avgTrainLoss, epoch)
+        # writer.add_scalar('Train/Loss', avgTestLoss, epoch)
 
     save_weights(encoder, args.model_path + "encoder")
-
     save_weights(decoder, args.model_path + "decoder")
+
+    # load_weights(encoder, args.model_path + "encoder")
+    # load_weights(decoder, args.model_path + "decoder")
+
 
     sample = Sample(encoder, decoder, device)
 
-    train_ouutput = sample.predict(Train_feature[Train_images[0:15]])
-    test_ouutput = sample.predict(Test_feature[Test_images[0:15]])
+    Train_mask = []
+    for i in range(15):
+        Train_mask.append(random.randint(0, 399999))
+    Test_mask = []
+    for i in range(15):
+        Test_mask.append(random.randint(0, 195953))
+
+    train_ouutput = sample.predict(Train_feature[Train_images[Train_mask]])
+    test_ouutput = sample.predict(Test_feature[Test_images[Test_mask]])
 
     train_sent = idx_to_sentence(train_ouutput, Data.idx_to_word)
-    train_GT = idx_to_sentence(Train_captions[0:15], Data.idx_to_word)
+    train_GT = idx_to_sentence(Train_captions[Train_mask], Data.idx_to_word)
 
     test_sent = idx_to_sentence(test_ouutput, Data.idx_to_word)
-    test_GT = idx_to_sentence(Test_captions[0:15], Data.idx_to_word)
+    test_GT = idx_to_sentence(Test_captions[Test_mask], Data.idx_to_word)
 
     for i in range(15):
         print(train_sent[i])
@@ -78,7 +94,6 @@ def train_step(encoder, decoder, criterion, optimizer):
         Train_length = Train_lengths[start: start + args.batch_size]
 
         Train_fea = torch.from_numpy(Train_feature[Train_image])
-        Train_image = torch.from_numpy(Train_image)
         Train_caption = torch.from_numpy(Train_caption)
         Train_length = torch.from_numpy(Train_length)
 
@@ -101,7 +116,7 @@ def train_step(encoder, decoder, criterion, optimizer):
         loss.backward()
 
         optimizer.step()
-    return Train_totalLoss / Train_captions.shape[0]
+    return Train_totalLoss / Data.train_size
 
 
 def val_step(encoder, decoder, criterion):
@@ -114,7 +129,6 @@ def val_step(encoder, decoder, criterion):
         Test_length = Test_lengths[start: start + args.batch_size]
 
         Test_fea = torch.from_numpy(Test_feature[Test_image])
-        Test_image = torch.from_numpy(Test_image)
         Test_caption = torch.from_numpy(Test_caption)
         Test_length = torch.from_numpy(Test_length)
 
@@ -126,12 +140,11 @@ def val_step(encoder, decoder, criterion):
         targets = pack_padded_sequence(Test_caption, Test_length, batch_first=True, enforce_sorted=False)[0]
 
         outputs = decoder(Test_fea, Test_caption, Test_length)
-        # outputs = outputs.reshape(int(outputs.size(0) / 17), 1004, 17)
 
         loss = criterion(outputs, targets)
         Test_totalLoss += loss.item() * args.batch_size
 
-    return Test_totalLoss / Test_captions.shape[0]
+    return Test_totalLoss / Data.val_size
 
 
 if __name__ == '__main__':
@@ -139,15 +152,14 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, default='models/', help='path for saving trained models')
 
     # Model parameters
-    parser.add_argument('--embed_size', type=int, default=128, help='dimension of word embedding vectors')
-    parser.add_argument('--hidden_size', type=int, default=128, help='dimension of lstm hidden states')
-    parser.add_argument('--num_layers', type=int, default=2, help='number of layers in lstm')
+    parser.add_argument('--embed_size', type=int, default=256, help='dimension of word embedding vectors')
+    parser.add_argument('--hidden_size', type=int, default=256, help='dimension of lstm hidden states')
+    parser.add_argument('--num_layers', type=int, default=1, help='number of layers in lstm')
 
-    parser.add_argument('--num_epochs', type=int, default=300)
-    parser.add_argument('--batch_size', type=int, default=5)
-    parser.add_argument('--num_workers', type=int, default=2)
-    parser.add_argument('--learning_rate', type=float, default=1e-3)
-    parser.add_argument('--rg', type=float, default=0)
+    parser.add_argument('--num_epochs', type=int, default=150)
+    parser.add_argument('--batch_size', type=int, default=2300)
+    parser.add_argument('--learning_rate', type=float, default=4e-4)
+    parser.add_argument('--rg', type=float, default=1e-6)
     args = parser.parse_args()
 
     print(args)

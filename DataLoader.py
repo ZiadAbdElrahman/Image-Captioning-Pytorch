@@ -19,7 +19,9 @@ class DataLoader():
         self.word_to_idx = data['word_to_idx']
         self.train_size = self.train_captions.shape[0]
         self.val_size = self.val_captions.shape[0]
-
+        mean = np.mean(self.train_features, 0)
+        self.train_features -= mean
+        self.val_features -= mean
         print('Training data of {} image , Val data of {} image '
               .format(self.train_size, self.val_size))
 
@@ -32,11 +34,8 @@ class DataLoader():
                 if self.train_captions[i, j] == 0:
                     lengths[i] = j
                     break
-        img = []
-        # for i in range(size):
-        #     img.append(self.get_image(self.train_urls[self.train_image_idxs[i]]))
-        # img = np.array(img)
-        return self.train_captions[0:size], self.train_image_idxs[0:size], self.train_features, lengths, img
+
+        return self.train_captions[0:size], self.train_image_idxs[0:size], self.train_features, lengths
 
     def get_val_data(self, size=None):
         if size == None: size = self.val_size
@@ -46,7 +45,7 @@ class DataLoader():
             for j in range(17):
                 if self.val_captions[i, j] == 0:
                     lengths[i] = j
-        #             break
+                    break
         return self.val_captions[0:size], self.val_image_idxs[0:size], self.val_features, lengths
 
     def next_batch(self, batch_size):
