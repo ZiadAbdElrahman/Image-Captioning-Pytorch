@@ -1,7 +1,7 @@
-
 from util import load_coco_data
 import numpy as np
 from util import image_from_url
+
 
 class DataLoader():
     def __init__(self):
@@ -17,9 +17,14 @@ class DataLoader():
         self.val_urls = data['val_urls']
         self.idx_to_word = data['idx_to_word']
         self.word_to_idx = data['word_to_idx']
+        self.train_size = self.train_captions.shape[0]
+        self.val_size = self.val_captions.shape[0]
 
-    def get_Training_data(self, size):
-        # print(self.val_captions.shape, self.val_urls.shape, self.val_image_idxs.shape, self.val_features.shape)
+        print('Training data of {} image , Val data of {} image '
+              .format(self.train_size, self.val_size))
+
+    def get_Training_data(self,  size=None):
+        if size == None: size = self.train_size
         lengths = np.zeros(size)
         lengths += 17
         for i in range(size):
@@ -33,7 +38,8 @@ class DataLoader():
         # img = np.array(img)
         return self.train_captions[0:size], self.train_image_idxs[0:size], self.train_features, lengths, img
 
-    def get_val_data(self, size):
+    def get_val_data(self, size=None):
+        if size == None: size = self.val_size
         lengths = np.zeros(size)
         lengths += 17
         for i in range(size):
