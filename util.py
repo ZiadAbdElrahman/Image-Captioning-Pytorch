@@ -1,10 +1,11 @@
+import os
+import json
+import h5py
 import torch
+import numpy as np
+from builtins import range
 from scipy.misc import imread
 import urllib.request, urllib.error, urllib.parse, tempfile
-from builtins import range
-import os, json
-import numpy as np
-import h5py
 
 
 def load_weights(model, path):
@@ -30,11 +31,15 @@ def idx_to_sentence(output, idx_to_word):
 
 
 BASE_DIR = 'coco_captioning'
-# BASE_DIR = ''
+
 
 def load_coco_data(base_dir=BASE_DIR,
                    max_train=None,
                    pca_features=True):
+    """
+    this fun from cs231n assigment3 files.
+    """
+
     data = {}
     caption_file = os.path.join(base_dir, 'coco2014_captions.h5')
     with h5py.File(caption_file, 'r') as f:
@@ -79,6 +84,7 @@ def load_coco_data(base_dir=BASE_DIR,
         data['train_image_idxs'] = data['train_image_idxs'][mask]
 
     return data
+
 
 def image_from_url(url):
     """

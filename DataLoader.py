@@ -5,7 +5,7 @@ from util import image_from_url
 
 class DataLoader():
     def __init__(self):
-        data = load_coco_data(pca_features=True)
+        data = load_coco_data(pca_features=False)
 
         self.train_captions = data['train_captions']
         self.train_image_idxs = data['train_image_idxs']
@@ -17,13 +17,17 @@ class DataLoader():
         self.val_urls = data['val_urls']
         self.idx_to_word = data['idx_to_word']
         self.word_to_idx = data['word_to_idx']
+
         self.train_size = self.train_captions.shape[0]
         self.val_size = self.val_captions.shape[0]
-        mean = np.mean(self.train_features, 0)
-        self.train_features -= mean
-        self.val_features -= mean
+
+        # mean = np.mean(self.train_features, 0)
+        # self.train_features /= mean
+        # self.val_features /= mean
+
         print('Training data of {} image , Val data of {} image '
               .format(self.train_size, self.val_size))
+
 
     def get_Training_data(self,  size=None):
         if size == None: size = self.train_size
@@ -37,6 +41,7 @@ class DataLoader():
 
         return self.train_captions[0:size], self.train_image_idxs[0:size], self.train_features, lengths
 
+
     def get_val_data(self, size=None):
         if size == None: size = self.val_size
         lengths = np.zeros(size)
@@ -46,13 +51,16 @@ class DataLoader():
                 if self.val_captions[i, j] == 0:
                     lengths[i] = j
                     break
+
         return self.val_captions[0:size], self.val_image_idxs[0:size], self.val_features, lengths
+
 
     def next_batch(self, batch_size):
         idx = np.random.choice(self.train_captions.shape[0], batch_size)
         lengths = np.zeros(batch_size)
         lengths += 17
         yield self.train_captions[idx], self.train_image_idxs[idx], self.train_features, lengths
+
 
     def get_image(self, img_url):
         img = image_from_url(img_url)

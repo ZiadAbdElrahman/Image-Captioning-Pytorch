@@ -6,15 +6,15 @@ class Encoder(nn.Module):
     def __init__(self, embed_size):
         super(Encoder, self).__init__()
 
-        self.bn1 = nn.BatchNorm1d(512,  momentum=0.01)
-        self.linear1 = nn.Linear(512, 1024)
+        # self.bn1 = nn.BatchNorm1d(512,  momentum=0.01)
+        self.linear1 = nn.Linear(4096, 1024)
         self.bn2 = nn.BatchNorm1d(1024,  momentum=0.01)
         self.linear2 = nn.Linear(1024, embed_size)
         self.bn3 = nn.BatchNorm1d(embed_size,  momentum=0.01)
 
     def forward(self, image):
 
-        image = (self.bn1(image))
+        # image = (self.bn1(image))
         feature = (self.linear1(image))
         feature = (self.bn2(feature))
         feature = (self.linear2(feature))
@@ -38,7 +38,7 @@ class Decoder(nn.Module):
         embeddings = self.embed(captions)
         embeddings = torch.cat((feature.unsqueeze(1), embeddings), 1)
 
-        packed = pack_padded_sequence(embeddings, lengths, batch_first=True, enforce_sorted=True)
+        packed = pack_padded_sequence(embeddings, lengths, batch_first=True)
 
         hiddens, _ = self.lstm(packed)
         output = self.linear1(hiddens[0])

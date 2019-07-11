@@ -23,8 +23,8 @@ def main(args):
     encoder = Encoder(args.embed_size).to(device)
     decoder = Decoder(args.embed_size, args.hidden_size, len(Data.word_to_idx), args.num_layers).to(device)
 
-    load_weights(encoder, args.model_path + "2.04encoder")
-    load_weights(decoder, args.model_path + "2.04decoder")
+    # load_weights(encoder, args.model_path + "2.04encoder")
+    # load_weights(decoder, args.model_path + "2.04decoder")
 
     criterion = nn.CrossEntropyLoss()
 
@@ -53,7 +53,6 @@ def main(args):
     Test_mask = []
     for i in range(30):
         Test_mask.append(random.randint(0, Test_captions.shape[0]))
-
 
     train_ouutput = sample.predict(Train_feature[Train_images[Train_mask]])
     test_ouutput = sample.predict(Test_feature[Test_images[Test_mask]])
@@ -97,32 +96,25 @@ def main(args):
 
 def train_step(encoder, decoder, criterion, optimizer):
     Train_totalLoss = 0
-    for i in range(int(Train_captions.shape[0] / args.batch_size )):
+    for i in range(int(Train_captions.shape[0] / args.batch_size)):
         start = args.batch_size * i
 
         Train_caption = Train_captions[start: start + args.batch_size]
         Train_image = Train_images[start: start + args.batch_size]
         Train_length = Train_lengths[start: start + args.batch_size]
 
-        Train_fea = torch.from_numpy(Train_feature[Train_image])
-        Train_caption = torch.from_numpy(Train_caption)
-        Train_length = torch.from_numpy(Train_length)
+        Train_fea = torch.from_numpy(Train_feature[Train_image]).to(device)
+        Train_caption = torch.from_numpy(Train_caption).long().to(device)
+        Train_length, perm_index = torch.from_numpy(Train_length).sort(0, descending=True)
 
-        Train_caption = Train_caption.long()
-        Train_caption = Train_caption.to(device)
-        Train_fea = Train_fea.to(device)
-
-        Train_length, perm_index = Train_length.sort(0, descending=True)
+        cap = Train_caption[perm_index]
         Train_fea = Train_fea[perm_index]
 
         Train_fea = encoder(Train_fea)
 
-        cap = Train_caption[perm_index]
-
         targets = pack_padded_sequence(cap, Train_length, batch_first=True, enforce_sorted=True)[0]
 
         outputs = decoder(Train_fea, cap, Train_length)
-
 
         loss = criterion(outputs, targets)
         # loss = criterion(outputs.reshape(800, 1004, 17), cap)
@@ -132,8 +124,8 @@ def train_step(encoder, decoder, criterion, optimizer):
         encoder.zero_grad()
 
         loss.backward()
-
         optimizer.step()
+
     return Train_totalLoss / Train_captions.shape[0]
 
 
@@ -147,24 +139,14 @@ def val_step(encoder, decoder, criterion):
         Test_image = Test_images[start: start + args.batch_size]
         Test_length = Test_lengths[start: start + args.batch_size]
 
-        Test_fea = torch.from_numpy(Test_feature[Test_image])
-        Test_caption = torch.from_numpy(Test_caption)
-        Test_length = torch.from_numpy(Test_length)
+        Test_fea = torch.from_numpy(Test_feature[Test_image]).to(device)
+        Test_caption = torch.from_numpy(Test_caption).long().to(device)
+        Test_length, perm_index = torch.from_numpy(Test_length).sort(0, descending=True)
 
-        Test_caption = Test_caption.long()
-        Test_caption = Test_caption.to(device)
-        Test_fea = Test_fea.to(device)
-
-        Test_length, perm_index = Test_length.sort(0, descending=True)
+        cap = Test_caption[perm_index]
         Test_fea = Test_fea[perm_index]
 
         Test_fea = encoder(Test_fea)
-
-        start = []
-        start.append(Test_fea.unsqueeze(0))
-        start.append(torch.zeros_like(Test_fea.unsqueeze(0)))
-
-        cap = Test_caption[perm_index]
 
         targets = pack_padded_sequence(cap, Test_length, batch_first=True, enforce_sorted=True)[0]
 
@@ -182,14 +164,14 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, default='models/', help='path for saving trained models')
 
     # Model parameters
-    parser.add_argument('--embed_size', type=int, default=256, help='dimension of word embedding vectors')
-    parser.add_argument('--hidden_size', type=int, default=256, help='dimension of lstm hidden states')
+    parser.add_argument('--embed_size', type=int, default=512, help='dimension of word embedding vectors')
+    parser.add_argument('--hidden_size', type=int, default=512, help='dimension of lstm hidden states')
     parser.add_argument('--num_layers', type=int, default=1, help='number of layers in lstm')
 
-    parser.add_argument('--num_epochs', type=int, default=10)
+    parser.add_argument('--num_epochs', type=int, default=50)
     parser.add_argument('--batch_size', type=int, default=1000)
-    parser.add_argument('--learning_rate', type=float, default=1e-4)
-    parser.add_argument('--reg', type=float, default=9e-6)
+    parser.add_argument('--learning_rate', type=float, default=6e-4)
+    parser.add_argument('--reg', type=float, default=1e-4)
     args = parser.parse_args()
 
     print(args)
