@@ -6,26 +6,19 @@ class Encoder(nn.Module):
     def __init__(self, embed_size):
         super(Encoder, self).__init__()
 
-        # resnet = models.resnet152(pretrained=True)
-        #
-        # model = list(resnet.children())[:-1]
-        #
-        # self.resnet = nn.sequential(*model)
+        self.bn1 = nn.BatchNorm1d(512,  momentum=0.01)
         self.linear1 = nn.Linear(512, 1024)
-        self.bn1 = nn.BatchNorm1d(1024,  momentum=0.01)
+        self.bn2 = nn.BatchNorm1d(1024,  momentum=0.01)
         self.linear2 = nn.Linear(1024, embed_size)
-        self.bn2 = nn.BatchNorm1d(embed_size,  momentum=0.01)
+        self.bn3 = nn.BatchNorm1d(embed_size,  momentum=0.01)
 
     def forward(self, image):
-        # with torch.no_grad():
-        #     feature = self.resnet(image)
 
-        # feature = feature.reshape(feature.size(0), -1)
-
+        image = (self.bn1(image))
         feature = (self.linear1(image))
-        feature = (self.bn1(feature))
-        feature = (self.linear2(feature))
         feature = (self.bn2(feature))
+        feature = (self.linear2(feature))
+        feature = (self.bn3(feature))
 
         return feature
 
@@ -37,9 +30,7 @@ class Decoder(nn.Module):
 
         self.embed = nn.Embedding(1004, embed_size)
         self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True)
-        self.linear1 = nn.Linear(hidden_size, 512)
-        self.bn = nn.BatchNorm1d(512,  momentum=0.01)
-        self.linear2 = nn.Linear(512, vocab_size)
+        self.linear1 = nn.Linear(hidden_size, vocab_size)
         self.max_seg_length = max_seq_length
 
     def forward(self, feature, captions, lengths):
@@ -47,13 +38,11 @@ class Decoder(nn.Module):
         embeddings = self.embed(captions)
         embeddings = torch.cat((feature.unsqueeze(1), embeddings), 1)
 
-        packed = pack_padded_sequence(embeddings, lengths, batch_first=True, enforce_sorted=False)
+        packed = pack_padded_sequence(embeddings, lengths, batch_first=True, enforce_sorted=True)
 
         hiddens, _ = self.lstm(packed)
-
         output = self.linear1(hiddens[0])
-        output = self.bn(output)
-        output = self.linear2(output)
+
 
         return output
 
@@ -65,8 +54,6 @@ class Decoder(nn.Module):
         for i in range(self.max_seg_length):
             hiddens, states = self.lstm(inputs, states)
             outputs = self.linear1(hiddens.squeeze(1))
-            outputs = self.bn(outputs)
-            outputs = self.linear2(outputs)
             _, predicted = outputs.max(1)
             sampled_ids.append(predicted)
             inputs = self.embed(predicted)
@@ -74,4 +61,5 @@ class Decoder(nn.Module):
 
         sampled_ids = torch.stack(sampled_ids, 1)
         return sampled_ids
+
 

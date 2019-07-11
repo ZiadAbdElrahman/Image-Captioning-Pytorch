@@ -4,11 +4,11 @@ import argparse
 import numpy as np
 from torch import nn
 from sample import Sample
+import matplotlib.pyplot as plt
 from DataLoader import DataLoader
 from model import Encoder, Decoder
-from util import save_weights, idx_to_sentence, load_weights
 from torch.nn.utils.rnn import pack_padded_sequence
-
+from util import save_weights, idx_to_sentence, load_weights, image_from_url
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -23,10 +23,13 @@ def main(args):
     encoder = Encoder(args.embed_size).to(device)
     decoder = Decoder(args.embed_size, args.hidden_size, len(Data.word_to_idx), args.num_layers).to(device)
 
+    load_weights(encoder, args.model_path + "2.04encoder")
+    load_weights(decoder, args.model_path + "2.04decoder")
+
     criterion = nn.CrossEntropyLoss()
 
-    params = list(decoder.linear.parameters()) + list(encoder.parameters())
-    optimizer = torch.optim.Adam(params, lr=args.learning_rate, weight_decay=args.rg)
+    params = list(decoder.parameters()) + list(encoder.parameters())
+    optimizer = torch.optim.Adam(params, lr=args.learning_rate, weight_decay=args.reg)
 
     for epoch in range(args.num_epochs):
         avgTrainLoss = train_step(encoder, decoder, criterion, optimizer)
@@ -35,24 +38,22 @@ def main(args):
         print('Epoch [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}, TestLoss: {:.4f}, TestPerplexity: {:5.4f}'
               .format(epoch + 1, args.num_epochs, avgTrainLoss,
                       np.exp(avgTrainLoss), avgTestLoss, np.exp(avgTestLoss)))
-        # writer.add_scalar('Train/Loss', avgTrainLoss, epoch)
-        # writer.add_scalar('Train/Loss', avgTestLoss, epoch)
 
     save_weights(encoder, args.model_path + "encoder")
     save_weights(decoder, args.model_path + "decoder")
-
+    #
     # load_weights(encoder, args.model_path + "encoder")
     # load_weights(decoder, args.model_path + "decoder")
-
 
     sample = Sample(encoder, decoder, device)
 
     Train_mask = []
-    for i in range(15):
-        Train_mask.append(random.randint(0, 399999))
+    for i in range(5):
+        Train_mask.append(random.randint(0, Train_captions.shape[0]))
     Test_mask = []
-    for i in range(15):
-        Test_mask.append(random.randint(0, 195953))
+    for i in range(30):
+        Test_mask.append(random.randint(0, Test_captions.shape[0]))
+
 
     train_ouutput = sample.predict(Train_feature[Train_images[Train_mask]])
     test_ouutput = sample.predict(Test_feature[Test_images[Test_mask]])
@@ -63,11 +64,16 @@ def main(args):
     test_sent = idx_to_sentence(test_ouutput, Data.idx_to_word)
     test_GT = idx_to_sentence(Test_captions[Test_mask], Data.idx_to_word)
 
-    for i in range(15):
+    for i in range(5):
         print(train_sent[i])
         print(train_GT[i])
         print("")
-        print("")
+        try:
+            img = image_from_url(Data.train_urls[Train_images[Train_mask[i]]])
+            plt.imshow(img)
+            plt.show()
+        except:
+            print("error")
 
     print("")
     print("")
@@ -77,16 +83,21 @@ def main(args):
     print("")
     print("")
 
-    for i in range(15):
+    for i in range(30):
         print(test_sent[i])
         print(test_GT[i])
         print("")
-        print("")
+        try:
+            img = image_from_url(Data.val_urls[Test_images[Test_mask[i]]])
+            plt.imshow(img)
+            plt.show()
+        except:
+            print("error")
 
 
 def train_step(encoder, decoder, criterion, optimizer):
     Train_totalLoss = 0
-    for i in range(int(Train_captions.shape[0] / args.batch_size)):
+    for i in range(int(Train_captions.shape[0] / args.batch_size )):
         start = args.batch_size * i
 
         Train_caption = Train_captions[start: start + args.batch_size]
@@ -101,13 +112,20 @@ def train_step(encoder, decoder, criterion, optimizer):
         Train_caption = Train_caption.to(device)
         Train_fea = Train_fea.to(device)
 
+        Train_length, perm_index = Train_length.sort(0, descending=True)
+        Train_fea = Train_fea[perm_index]
+
         Train_fea = encoder(Train_fea)
 
-        targets = pack_padded_sequence(Train_caption, Train_length, batch_first=True, enforce_sorted=False)[0]
+        cap = Train_caption[perm_index]
 
-        outputs = decoder(Train_fea, Train_caption, Train_length)
+        targets = pack_padded_sequence(cap, Train_length, batch_first=True, enforce_sorted=True)[0]
+
+        outputs = decoder(Train_fea, cap, Train_length)
+
 
         loss = criterion(outputs, targets)
+        # loss = criterion(outputs.reshape(800, 1004, 17), cap)
         Train_totalLoss += loss.item() * args.batch_size
 
         decoder.zero_grad()
@@ -116,7 +134,7 @@ def train_step(encoder, decoder, criterion, optimizer):
         loss.backward()
 
         optimizer.step()
-    return Train_totalLoss / Data.train_size
+    return Train_totalLoss / Train_captions.shape[0]
 
 
 def val_step(encoder, decoder, criterion):
@@ -124,6 +142,7 @@ def val_step(encoder, decoder, criterion):
 
     for i in range(int(Test_captions.shape[0] / args.batch_size)):
         start = args.batch_size * i
+
         Test_caption = Test_captions[start: start + args.batch_size]
         Test_image = Test_images[start: start + args.batch_size]
         Test_length = Test_lengths[start: start + args.batch_size]
@@ -136,15 +155,26 @@ def val_step(encoder, decoder, criterion):
         Test_caption = Test_caption.to(device)
         Test_fea = Test_fea.to(device)
 
-        Test_fea = encoder(Test_fea)
-        targets = pack_padded_sequence(Test_caption, Test_length, batch_first=True, enforce_sorted=False)[0]
+        Test_length, perm_index = Test_length.sort(0, descending=True)
+        Test_fea = Test_fea[perm_index]
 
-        outputs = decoder(Test_fea, Test_caption, Test_length)
+        Test_fea = encoder(Test_fea)
+
+        start = []
+        start.append(Test_fea.unsqueeze(0))
+        start.append(torch.zeros_like(Test_fea.unsqueeze(0)))
+
+        cap = Test_caption[perm_index]
+
+        targets = pack_padded_sequence(cap, Test_length, batch_first=True, enforce_sorted=True)[0]
+
+        outputs = decoder(Test_fea, cap, Test_length)
 
         loss = criterion(outputs, targets)
+        # loss = criterion(outputs.reshape(800, 1004, 17), cap)
         Test_totalLoss += loss.item() * args.batch_size
 
-    return Test_totalLoss / Data.val_size
+    return Test_totalLoss / Test_captions.shape[0]
 
 
 if __name__ == '__main__':
@@ -156,10 +186,10 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_size', type=int, default=256, help='dimension of lstm hidden states')
     parser.add_argument('--num_layers', type=int, default=1, help='number of layers in lstm')
 
-    parser.add_argument('--num_epochs', type=int, default=150)
-    parser.add_argument('--batch_size', type=int, default=2300)
-    parser.add_argument('--learning_rate', type=float, default=4e-4)
-    parser.add_argument('--rg', type=float, default=1e-6)
+    parser.add_argument('--num_epochs', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=1000)
+    parser.add_argument('--learning_rate', type=float, default=1e-4)
+    parser.add_argument('--reg', type=float, default=9e-6)
     args = parser.parse_args()
 
     print(args)
