@@ -31,7 +31,8 @@ class Decoder(nn.Module):
         for i in range(num_of_wards):
             h, c = self.lstm(embeddings[:, i, :], (h, c))
             outputs.append(h)
-        h += feature
+            h += feature
+
         outputs = torch.stack(outputs, 1)
         outputs = self.linear(outputs)
         return outputs
