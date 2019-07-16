@@ -5,6 +5,7 @@ import torch
 import numpy as np
 from builtins import range
 from scipy.misc import imread
+import matplotlib.pyplot as plt
 import urllib.request, urllib.error, urllib.parse, tempfile
 
 
@@ -14,6 +15,25 @@ def load_weights(model, path):
 
 def save_weights(model, path):
     torch.save(model.state_dict(), os.path.join(path))
+
+
+def print_output(output, gt, img, show_image, idx_to_word):
+    out_sent = idx_to_sentence(output, idx_to_word)
+    gt_sent = idx_to_sentence(gt, idx_to_word)
+    for i in range(len(out_sent)):
+        print(out_sent[i])
+        print("GT " + gt_sent[i])
+        print("")
+        print("")
+
+        if show_image:
+            try:
+                img = image_from_url(img)
+                plt.imshow(img)
+                plt.show()
+
+            except:
+                print("error")
 
 
 def idx_to_sentence(output, idx_to_word):
