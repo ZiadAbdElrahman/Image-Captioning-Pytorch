@@ -5,7 +5,7 @@ from util import image_from_url
 
 class DataLoader():
     def __init__(self):
-        data = load_coco_data(pca_features=False)
+        data = load_coco_data(pca_features=True)
 
         self.train_captions = data['train_captions']
         self.train_image_idxs = data['train_image_idxs']
@@ -21,9 +21,12 @@ class DataLoader():
         self.train_size = self.train_captions.shape[0]
         self.val_size = self.val_captions.shape[0]
 
-        # mean = np.mean(self.train_features, 0)
+        # mean = np.mean(self.train_features, 0) + 1e-20
+        # self.train_features -= mean
+        # self.val_features -= mean
         # self.train_features /= mean
         # self.val_features /= mean
+
 
         print('Training data of {} image , Val data of {} image '
               .format(self.train_size, self.val_size))
@@ -32,27 +35,32 @@ class DataLoader():
     def get_Training_data(self,  size=None):
         if size == None: size = self.train_size
         lengths = np.zeros(size)
-        lengths += 17
+        lengths += 16
         for i in range(size):
             for j in range(17):
+                # if self.train_captions[i, j] == 2:
+                #     self.train_captions[i, j] = 0
+
                 if self.train_captions[i, j] == 0:
                     lengths[i] = j
                     break
 
-        return self.train_captions[0:size], self.train_image_idxs[0:size], self.train_features, lengths
+        return self.train_captions[0:size], self.train_features[self.train_image_idxs[0:size]], lengths
 
 
     def get_val_data(self, size=None):
         if size == None: size = self.val_size
         lengths = np.zeros(size)
-        lengths += 17
+        lengths += 16
         for i in range(size):
             for j in range(17):
+                # if self.val_captions[i, j] == 2:
+                #     self.val_captions[i, j] = 0
                 if self.val_captions[i, j] == 0:
                     lengths[i] = j
                     break
 
-        return self.val_captions[0:size], self.val_image_idxs[0:size], self.val_features, lengths
+        return self.val_captions[0:size], self.val_features[self.val_image_idxs[0:size]], lengths
 
 
     def next_batch(self, batch_size):
