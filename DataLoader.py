@@ -21,7 +21,7 @@ class DataLoader:
         self.val_size = self.val_captions.shape[0]
 
         if norm:
-            mean = np.mean(self.train_features, 0) + 1e-20
+            mean = np.mean(self.train_features, 0) + 1e-25
             self.train_features -= mean
             self.val_features -= mean
             self.train_features /= mean
@@ -30,11 +30,25 @@ class DataLoader:
 
     def get_Training_data(self, size=None):
         if size == None: size = self.train_size
+        lengths = np.zeros(size)
+        lengths += 16
+        for i in range(size):
+            for j in range(16):
+                if self.train_captions[i, j] == 0:
+                    lengths[i] = j
+                    break
         return self.train_captions[:size], self.train_features[self.train_image_idxs[:size]], self.train_urls[
-            self.train_image_idxs[:size]]
+            self.train_image_idxs[:size]], lengths
 
     def get_val_data(self, size=None):
         if size == None: size = self.val_size
+        lengths = np.zeros(size)
+        lengths += 17
+        for i in range(size):
+            for j in range(17):
+                if self.train_captions[i, j] == 0:
+                    lengths[i] = j
+                    break
         return self.val_captions[:size], self.val_features[self.val_image_idxs[:size]], self.val_urls[
-            self.val_image_idxs[:size]]
+            self.val_image_idxs[:size]], lengths
 

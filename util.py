@@ -17,23 +17,25 @@ def save_weights(model, path):
     torch.save(model.state_dict(), os.path.join(path))
 
 
-def print_output(output, gt, img, show_image, idx_to_word):
+def print_output(output, gt, img, title, show_image, idx_to_word):
     out_sent = idx_to_sentence(output, idx_to_word)
     gt_sent = idx_to_sentence(gt, idx_to_word)
     for i in range(len(out_sent)):
-        print(out_sent[i])
-        print("GT " + gt_sent[i])
-        print("")
-        print("")
-
         if show_image:
             try:
-                img = image_from_url(img)
-                plt.imshow(img)
+                plt.imshow(image_from_url(img[i]))
+                plt.title('%s\n%s\nGT:%s' % (title, out_sent[i], gt_sent[i]))
+                plt.axis('off')
                 plt.show()
-
             except:
-                print("error")
+                plt.title('%s\n%s\nGT:%s' % (title, out_sent[i], gt_sent[i]))
+                plt.axis('off')
+                plt.show()
+        else:
+            print(out_sent[i])
+            print("GT " + gt_sent[i])
+            print("")
+            print("")
 
 
 def idx_to_sentence(output, idx_to_word):
@@ -42,9 +44,9 @@ def idx_to_sentence(output, idx_to_word):
         sentence = ""
         for j in range(16):
             word = idx_to_word[output[i, j]]
-            sentence += " " + word
             if word == "<END>":
                 break
+            sentence += " " + word
         sentences.append(sentence)
 
     return sentences
