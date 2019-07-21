@@ -40,10 +40,10 @@ def print_output(output, gt, img, title, show_image, idx_to_word):
 
 def idx_to_sentence(output, idx_to_word):
     sentences = []
-    for i in range(output.shape[0]):
+    for i in range(len(output)):
         sentence = ""
         for j in range(16):
-            word = idx_to_word[output[i, j]]
+            word = idx_to_word[output[i][j]]
             if word == "<END>":
                 break
             sentence += " " + word

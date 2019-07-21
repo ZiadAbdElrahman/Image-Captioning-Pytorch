@@ -13,6 +13,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def main(args):
+
     data = DataLoader(pca=args.PCA, norm=args.norm)
 
     train_captions, train_feature, train_url, train_len = data.get_Training_data(args.training)
@@ -52,7 +53,7 @@ def main(args):
               .format(epoch + 1, args.num_epochs, training_loss,
                       np.exp(training_loss), test_loss, np.exp(test_loss)))
 
-        args.learning_rate *= 0.99
+        args.learning_rate *= 0.995
 
     if args.save_weight:
         save_weights(encoder, args.model_path + "encoder")
@@ -61,21 +62,34 @@ def main(args):
     if args.predict:
 
         sample = Sample(encoder=encoder, decoder=decoder, device=device)
-        train_mask = []
-        test_mask = []
+          # (1, enc_image_size, enc_image_size, encoder_dim)
+
+        train_mask = [random.randint(0, train_captions.shape[0] - 1) for _ in range(args.numOfpredection)]
+        test_mask = [random.randint(0, test_captions.shape[0] - 1) for _ in range(args.numOfpredection)]
+
+        train_feature = torch.from_numpy(train_feature[train_mask])
+        train_feature = train_feature.to(device)
+        train_encoder_out = encoder(train_feature)
+
+        test_feature = torch.from_numpy(test_feature[test_mask])
+        test_feature = test_feature.to(device)
+        test_encoder_out = encoder(test_feature)
+
+        train_output = []
+        test_output = []
+
         for i in range(args.numOfpredection):
-            train_mask.append(random.randint(0, train_captions.shape[0] - 1))
-            test_mask.append(random.randint(0, test_captions.shape[0] - 1))
+            pre = sample.caption_image_beam_search(train_encoder_out[i].reshape(1, 512), data.word_to_idx, 10)
+            train_output.append(pre)
+            pre = sample.caption_image_beam_search(test_encoder_out[i].reshape(1, 512), data.word_to_idx, 10)
+            test_output.append(pre)
 
-        train_output = sample.predict(image_feature=train_feature[train_mask])
-        test_output = sample.predict(image_feature=test_feature[test_mask])
-
-        print_output(output=train_output,
-                     gt=train_captions[train_mask],
-                     img=train_url[train_mask],
-                     title="traning",
-                     show_image=args.show_image,
-                     idx_to_word=data.idx_to_word)
+        # print_output(output=train_output,
+        #              gt=train_captions[train_mask],
+        #              img=train_url[train_mask],
+        #              title="traning",
+        #              show_image=args.show_image,
+        #              idx_to_word=data.idx_to_word)
 
         print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
         print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
@@ -106,14 +120,14 @@ def step(encoder, decoder, criterion, data, optimizer=None):
         feature = encoder(feature[sort_ind])
         caption = caption[sort_ind]
 
-        outputs = decoder(feature, caption, length).permute(0, 2, 1)
-        # outputs = decoder(feature, caption, length)
+        # outputs = decoder(feature, caption, length).permute(0, 2, 1)
+        outputs = decoder(feature, caption, length)
         #
-        # outputs = pack_padded_sequence(outputs, length, batch_first=True)
-        # targets = pack_padded_sequence(caption[:, 1:], length, batch_first=True)
+        outputs = pack_padded_sequence(outputs, length, batch_first=True)
+        targets = pack_padded_sequence(caption[:, 1:], length, batch_first=True)
         #
-        # loss = criterion(outputs[0], targets[0])
-        loss = criterion(outputs, caption[:, 1:])
+        loss = criterion(outputs[0], targets[0])
+        # loss = criterion(outputs, caption[:, 1:])
 
         total_Loss += (loss.item() * args.batch_size)
 
@@ -135,8 +149,8 @@ if __name__ == '__main__':
     parser.add_argument('--load_weight', type=bool, default=False, help='load the weights or not')
     parser.add_argument('--save_weight', type=bool, default=True, help='save the weights or not')
     parser.add_argument('--predict', type=bool, default=True, help='predict random sample or not')
-    parser.add_argument('--show_image', type=bool, default=False, help='num of image to predict')
-    parser.add_argument('--numOfpredection', type=int, default=10, help='num of image to predict')
+    parser.add_argument('--show_image', type=bool, default=True, help='num of image to predict')
+    parser.add_argument('--numOfpredection', type=int, default=15, help='num of image to predict')
 
     # Data
     parser.add_argument('--PCA', type=bool, default=True, help='PCA the features or not')
@@ -145,14 +159,14 @@ if __name__ == '__main__':
     parser.add_argument('--testing', type=int, default=None, help='number of images to test on, if None mean all data')
 
     # Model parameters
-    parser.add_argument('--embed_size', type=int, default=256, help='dimension of word embedding vectors')
-    parser.add_argument('--hidden_size', type=int, default=256, help='dimension of lstm hidden states')
-    parser.add_argument('--attention_size', type=int, default=256, help='dimension of attention')
+    parser.add_argument('--embed_size', type=int, default=128, help='dimension of word embedding vectors')
+    parser.add_argument('--hidden_size', type=int, default=128, help='dimension of lstm hidden states')
+    parser.add_argument('--attention_size', type=int, default=128, help='dimension of attention')
 
     # Training parameters
-    parser.add_argument('--num_epochs', type=int, default=10)
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--learning_rate', type=float, default=1e-4)
+    parser.add_argument('--num_epochs', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=300)
+    parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--reg', type=float, default=0)
     args = parser.parse_args()
 

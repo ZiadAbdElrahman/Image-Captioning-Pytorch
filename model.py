@@ -10,6 +10,7 @@ class Encoder(nn.Module):
 
     def forward(self, image):
         feature = self.bn1(self.linear1(image))
+
         return feature
 
 
@@ -31,7 +32,7 @@ class Attention(nn.Module):
         alpha = self.softmax(att)  # (batch_size, num_pixels)
         attention_weighted_encoding = (encoder_out * alpha.unsqueeze(2)).sum(dim=1)  # (batch_size, encoder_dim)
 
-        return attention_weighted_encoding
+        return attention_weighted_encoding, alpha
 
 
 class Decoder(nn.Module):
@@ -39,7 +40,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.embed = nn.Embedding(1004, embed_size)
         self.attention = Attention(hidden_size, embed_size, attention_dim)  # attention network
-        self.lstm = nn.LSTMCell(2 * embed_size, hidden_size)
+        self.lstm = nn.LSTMCell(2*embed_size, hidden_size)
         self.f_beta = nn.Linear(hidden_size, embed_size)
         self.linear = nn.Linear(hidden_size, vocab_size)
         self.sigmoid = nn.Sigmoid()
@@ -55,22 +56,19 @@ class Decoder(nn.Module):
 
     def forward(self, feature, captions, length):
         outputs = []
-        h = feature
-        c = torch.zeros_like(feature)
+        # h = feature
+        # c = torch.zeros_like(feature)
         h, c = self.init_hidden_state(feature)  # (batch_size, decoder_dim)
         embeddings = self.embed(captions)
         num_of_wards = int(length[0])
         num_of_wards = 16
 
         for i in range(num_of_wards):
-            attention_weighted_encoding = self.attention(feature, h)
-            # inputs = attention_weighted_encoding
-            # inputs = embeddings[:, i, :]
+            attention_weighted_encoding, _ = self.attention(feature, h)
             gate = self.sigmoid(self.f_beta(h))
             attention_weighted_encoding = gate * attention_weighted_encoding
-
             inputs = torch.cat([attention_weighted_encoding, embeddings[:, i, :]], dim=1)
-            h = attention_weighted_encoding
+            # inputs = embeddings[:, i, :]
             h, c = self.lstm(inputs, (h, c))
             outputs.append(h)
 
@@ -86,10 +84,10 @@ class Decoder(nn.Module):
         h, c = self.init_hidden_state(feature)  # (batch_size, decoder_dim)
 
         for i in range(self.max_seg_length):
-            attention_weighted_encoding = self.attention(feature, h)
-            gate = self.sigmoid(self.f_beta(h))
-            attention_weighted_encoding = gate * attention_weighted_encoding
-            inputs = torch.cat([attention_weighted_encoding, inputs], dim=1)
+            # attention_weighted_encoding, _ = self.attention(feature, h)
+            # gate = self.sigmoid(self.f_beta(h))
+            # attention_weighted_encoding = gate * attention_weighted_encoding
+            # inputs = torch.cat([attention_weighted_encoding, inputs], dim=1)
             h, c = self.lstm(inputs, (h, c))
             outputs = self.linear(h)
             _, predicted = outputs.max(1)
