@@ -17,20 +17,25 @@ def save_weights(model, path):
     torch.save(model.state_dict(), os.path.join(path))
 
 
-def print_output(output, gt, img, title, show_image, idx_to_word):
+def print_output(output, sample, gt, img, title, show_image, idx_to_word):
     out_sent = idx_to_sentence(output, idx_to_word)
+    sample_sent = idx_to_sentence(sample, idx_to_word)
     gt_sent = idx_to_sentence(gt, idx_to_word)
     for i in range(len(out_sent)):
+        print("{}, [{}/{}]".format(title, i + 1, len(out_sent)))
         if show_image:
             try:
                 plt.imshow(image_from_url(img[i]))
                 plt.title('%s\n%s\nGT:%s' % (title, out_sent[i], gt_sent[i]))
                 plt.axis('off')
-                plt.show()
+                plt.savefig("output/" + title + str(i) + '.png')
+                # plt.show()
             except:
-                plt.title('%s\n%s\nGT:%s' % (title, out_sent[i], gt_sent[i]))
-                plt.axis('off')
-                plt.show()
+                print("error")
+                # plt.title('%s\n%s\nGT:%s' % (title, out_sent[i], gt_sent[i]))
+                # plt.axis('off')
+                # plt.savefig("output/" + title + str(i) + '.png')
+                # # plt.show()
         else:
             print(out_sent[i])
             print("GT " + gt_sent[i])

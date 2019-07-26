@@ -8,16 +8,13 @@ class Sample:
         self.decoder = decoder
         self.device = device
 
-    def caption_image_beam_search(self, feature, idx_to_word, beam_size=3):
+    def caption_image_beam_search(self, encoder_out, idx_to_word, beam_size=3):
 
         k = beam_size
-        vocab_size = 1004
-
-        encoder_out = feature
-        enc_image_size = encoder_out.size(1)
+        vocab_size = len(idx_to_word)
 
         shape = encoder_out.size(1)
-        encoder_out = encoder_out.expand(k, shape)  # (k, num_pixels, encoder_dim)
+        encoder_out = encoder_out.expand(k, shape)  # (k, encoder_dim)
 
         k_prev_words = torch.ones(k).long().to(self.device)  # (k, 1)
 
@@ -25,11 +22,10 @@ class Sample:
 
         top_k_scores = torch.zeros(k, 1).to(self.device)  # (k, 1)
 
-        # Lists to store completed sequences, their alphas and scores
+        # Lists to store completed sequences
         complete_seqs = list()
         complete_seqs_scores = list()
 
-        # Start decoding
         step = 1
         h, c = self.decoder.init_hidden_state(encoder_out)
 
@@ -37,13 +33,14 @@ class Sample:
         while True:
             embeddings = self.decoder.embed(k_prev_words).squeeze(1)  # (s, embed_dim)
 
-            awe, alpha = self.decoder.attention(encoder_out, h)  # (s, encoder_dim), (s, num_pixels)
+            awe, alpha = self.decoder.attention(encoder_out, h)  # (s, encoder_dim)
 
             gate = self.decoder.sigmoid(self.decoder.f_beta(h))  # gating scalar, (s, encoder_dim)
             awe = gate * awe
-            inputs = torch.cat([awe, embeddings], dim=1)
-            # inputs = embeddings
-            h, c = self.decoder.lstm(inputs, (h, c))  # (s, decoder_dim)
+            # inputs = torch.cat([awe, embeddings], dim=1)
+            inputs = embeddings
+
+            h, c = self.decoder.lstm(inputs, (awe, c))  # (s, decoder_dim)
 
             scores = self.decoder.linear(h)  # (s, vocab_size)
             scores = F.log_softmax(scores, dim=1)
@@ -64,8 +61,6 @@ class Sample:
             if step == 1:
                 seqs = seqs[prev_word_inds].reshape(k, 1)
             seqs = torch.cat([seqs[prev_word_inds], next_word_inds.unsqueeze(1)], dim=1)  # (s, step+1)
-            # seqs_alpha = torch.cat([seqs_alpha[prev_word_inds], alpha[prev_word_inds].unsqueeze(1)],
-            #                        dim=1)  # (s, step+1, enc_image_size, enc_image_size)
 
             # Which sequences are incomplete (didn't reach <end>)?
             incomplete_inds = [ind for ind, next_word in enumerate(next_word_inds) if
@@ -95,11 +90,10 @@ class Sample:
         try:
             i = complete_seqs_scores.index(max(complete_seqs_scores))
             seq = complete_seqs[i]
+
         except:
             print("empty")
             seq = 0
-
-        # alphas = complete_seqs_alpha[i]
 
         return seq
 

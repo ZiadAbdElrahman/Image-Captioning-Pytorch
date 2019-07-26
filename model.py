@@ -5,11 +5,12 @@ import torch.nn as nn
 class Encoder(nn.Module):
     def __init__(self, input_size, hidden_size):
         super(Encoder, self).__init__()
+        self.bn1 = nn.BatchNorm1d(input_size)
         self.linear1 = nn.Linear(input_size, hidden_size)
-        self.bn1 = nn.BatchNorm1d(hidden_size)
+        self.bn2 = nn.BatchNorm1d(hidden_size)
 
     def forward(self, image):
-        feature = self.bn1(self.linear1(image))
+        feature = self.bn2(self.linear1(self.bn1(image)))
 
         return feature
 
@@ -40,7 +41,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.embed = nn.Embedding(1004, embed_size)
         self.attention = Attention(hidden_size, embed_size, attention_dim)  # attention network
-        self.lstm = nn.LSTMCell(2*embed_size, hidden_size)
+        self.lstm = nn.LSTMCell(embed_size, hidden_size)
         self.f_beta = nn.Linear(hidden_size, embed_size)
         self.linear = nn.Linear(hidden_size, vocab_size)
         self.sigmoid = nn.Sigmoid()
@@ -50,26 +51,24 @@ class Decoder(nn.Module):
 
     def init_hidden_state(self, encoder_out):
 
-        h = self.init_h(encoder_out)  # (batch_size, decoder_dim)
+        h = self.init_h(encoder_out)
         c = self.init_c(encoder_out)
+        # c *= 0
         return h, c
 
     def forward(self, feature, captions, length):
         outputs = []
-        # h = feature
-        # c = torch.zeros_like(feature)
         h, c = self.init_hidden_state(feature)  # (batch_size, decoder_dim)
         embeddings = self.embed(captions)
-        num_of_wards = int(length[0])
         num_of_wards = 16
 
         for i in range(num_of_wards):
             attention_weighted_encoding, _ = self.attention(feature, h)
             gate = self.sigmoid(self.f_beta(h))
             attention_weighted_encoding = gate * attention_weighted_encoding
-            inputs = torch.cat([attention_weighted_encoding, embeddings[:, i, :]], dim=1)
-            # inputs = embeddings[:, i, :]
-            h, c = self.lstm(inputs, (h, c))
+            # inputs = torch.cat([attention_weighted_encoding, embeddings[:, i, :]], dim=1)
+            inputs = embeddings[:, i, :]
+            h, c = self.lstm(inputs, (attention_weighted_encoding, c))
             outputs.append(h)
 
         outputs = torch.stack(outputs, 1)
@@ -78,17 +77,15 @@ class Decoder(nn.Module):
 
     def sample(self, feature, inputs):
         sampled_ids = []
-        h = feature
-        c = torch.zeros_like(feature)
         inputs = self.embed(inputs)
         h, c = self.init_hidden_state(feature)  # (batch_size, decoder_dim)
 
         for i in range(self.max_seg_length):
-            # attention_weighted_encoding, _ = self.attention(feature, h)
-            # gate = self.sigmoid(self.f_beta(h))
-            # attention_weighted_encoding = gate * attention_weighted_encoding
+            attention_weighted_encoding, _ = self.attention(feature, h)
+            gate = self.sigmoid(self.f_beta(h))
+            attention_weighted_encoding = gate * attention_weighted_encoding
             # inputs = torch.cat([attention_weighted_encoding, inputs], dim=1)
-            h, c = self.lstm(inputs, (h, c))
+            h, c = self.lstm(inputs, (attention_weighted_encoding, c))
             outputs = self.linear(h)
             _, predicted = outputs.max(1)
             sampled_ids.append(predicted)
