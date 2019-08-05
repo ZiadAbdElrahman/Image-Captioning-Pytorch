@@ -5,19 +5,20 @@ import torchvision.transforms as transforms
 from nltk.translate.bleu_score import corpus_bleu
 import torch.nn.functional as F
 from tqdm import tqdm
+from nltk.translate.bleu_score import SmoothingFunction
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # sets device for model and PyTorch tensors
 
+def evaluate(encoder, decoder, features, captions, beam_size, idx_to_word, word_to_idx):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # sets device for model and PyTorch tensors
 
-def evaluate(encoder, decoder, features, captions, beam_size, idx_to_word):
     references = list()
     hypotheses = list()
-    # features = torch.from_numpy(features)
-    # For each image
+
     for i in range(features.shape[0]):
+        if i % 1000 == 0:
+            print(i)
         k = beam_size
         feature = torch.from_numpy(features[i]).to(device).expand(k, features.shape[1])
-        caps = torch.from_numpy(captions[i])
 
         vocab_size = len(idx_to_word)
         encoder_out = encoder(feature)
@@ -90,10 +91,12 @@ def evaluate(encoder, decoder, features, captions, beam_size, idx_to_word):
             if step > 50:
                 break
             step += 1
-
-        i = complete_seqs_scores.index(max(complete_seqs_scores))
-        seq = complete_seqs[i]
-
+        try:
+            i = complete_seqs_scores.index(max(complete_seqs_scores))
+            seq = complete_seqs[i]
+        except:
+            seq = [5, 5, 5]
+            print("empty")
         # print(c.shape)
         # References
         # for w in c :
@@ -102,18 +105,27 @@ def evaluate(encoder, decoder, features, captions, beam_size, idx_to_word):
         # print(len(img_caps), c.shape)
         img_captions = []
         # for i in range(caps.shape[0]):
-        img_captions = list(
-            map(lambda caps: [w for w in c if
-                              w not in {idx_to_word['<START>'], idx_to_word['<END>'], idx_to_word['<NULL>']}],
-                caps))  # remove <start> and pads
-        references.append(img_captions)
+        # img_captions = list(
+        #     map(lambda caps: [w for w in c if
+        #                       w not in {idx_to_word['<START>'], idx_to_word['<END>'], idx_to_word['<NULL>']}],
+        #         caps))  # remove <start> and pads
+        references.append(captions[i])
         # Hypotheses
         hypotheses.append(
-            [w for w in seq if w not in {idx_to_word['<START>'], idx_to_word['<END>'], idx_to_word['<NULL>']}])
+            [word_to_idx[w] for w in seq if
+             w not in {idx_to_word['<START>'], idx_to_word['<END>'], idx_to_word['<NULL>']}])
 
         assert len(references) == len(hypotheses)
 
     # Calculate BLEU-4 scores
-    bleu4 = corpus_bleu(references, hypotheses)
 
-    return bleu4
+    bleu1 = corpus_bleu(references, hypotheses, weights=(1, 0, 0, 0))
+    print(bleu1)
+    bleu2 = corpus_bleu(references, hypotheses, weights=(0.5, 0.5, 0, 0))
+    print(bleu2)
+    bleu3 = corpus_bleu(references, hypotheses, weights=(0.33, 0.33, 0.33, 0))
+    print(bleu3)
+    bleu4 = corpus_bleu(references, hypotheses, weights=(0.25, 0.25, 0.25, 0.25))
+    print(bleu4)
+
+    return bleu1, bleu2, bleu3, bleu4
