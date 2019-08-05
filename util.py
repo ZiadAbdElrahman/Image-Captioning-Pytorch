@@ -19,7 +19,7 @@ def save_weights(model, path):
 
 def print_output(output, sample, gt, img, title, show_image, idx_to_word):
     out_sent = idx_to_sentence(output, idx_to_word)
-    sample_sent = idx_to_sentence(sample, idx_to_word)
+    # sample_sent = idx_to_sentence(sample, idx_to_word)
     gt_sent = idx_to_sentence(gt, idx_to_word)
     for i in range(len(out_sent)):
         print("{}, [{}/{}]".format(title, i + 1, len(out_sent)))
@@ -47,11 +47,15 @@ def idx_to_sentence(output, idx_to_word):
     sentences = []
     for i in range(len(output)):
         sentence = ""
-        for j in range(16):
+        for j in range(len(output[i])):
+            # try:
             word = idx_to_word[output[i][j]]
             if word == "<END>":
                 break
             sentence += " " + word
+            # except:
+            #     print("error")
+        # print(sentence)
         sentences.append(sentence)
 
     return sentences
