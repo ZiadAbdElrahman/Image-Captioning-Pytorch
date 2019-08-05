@@ -5,6 +5,7 @@ import torch.nn as nn
 class Encoder(nn.Module):
     def __init__(self, input_size, hidden_size):
         super(Encoder, self).__init__()
+
         self.bn1 = nn.BatchNorm1d(input_size)
         self.linear1 = nn.Linear(input_size, hidden_size)
         self.bn2 = nn.BatchNorm1d(hidden_size)
@@ -45,6 +46,8 @@ class Decoder(nn.Module):
         self.f_beta = nn.Linear(hidden_size, embed_size)
         self.linear = nn.Linear(hidden_size, vocab_size)
         self.sigmoid = nn.Sigmoid()
+        self.dropout = 0.5
+        self.dropout = nn.Dropout(p=0.5)
         self.max_seg_length = max_seq_length
         self.init_h = nn.Linear(hidden_size, embed_size)  # linear layer to find initial hidden state of LSTMCell
         self.init_c = nn.Linear(hidden_size, embed_size)  # linear layer to find initial cell state of LSTMCell
@@ -66,9 +69,9 @@ class Decoder(nn.Module):
             attention_weighted_encoding, _ = self.attention(feature, h)
             gate = self.sigmoid(self.f_beta(h))
             attention_weighted_encoding = gate * attention_weighted_encoding
-            # inputs = torch.cat([attention_weighted_encoding, embeddings[:, i, :]], dim=1)
-            inputs = embeddings[:, i, :]
-            h, c = self.lstm(inputs, (attention_weighted_encoding, c))
+            inputs = torch.cat([attention_weighted_encoding, embeddings[:, i, :]], dim=1)
+            # inputs = embeddings[:, i, :]
+            h, c = self.lstm(inputs, (h, c))
             outputs.append(h)
 
         outputs = torch.stack(outputs, 1)
@@ -84,9 +87,9 @@ class Decoder(nn.Module):
             attention_weighted_encoding, _ = self.attention(feature, h)
             gate = self.sigmoid(self.f_beta(h))
             attention_weighted_encoding = gate * attention_weighted_encoding
-            # inputs = torch.cat([attention_weighted_encoding, inputs], dim=1)
-            h, c = self.lstm(inputs, (attention_weighted_encoding, c))
-            outputs = self.linear(h)
+            inputs = torch.cat([attention_weighted_encoding, inputs], dim=1)
+            h, c = self.lstm(inputs, (h, c))
+            outputs = self.linear(self.dropout(h))
             _, predicted = outputs.max(1)
             sampled_ids.append(predicted)
             inputs = self.embed(predicted)
