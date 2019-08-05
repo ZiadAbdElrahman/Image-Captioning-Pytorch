@@ -1,7 +1,9 @@
 import torch
 import random
+from PIL import Image
 import argparse
 import numpy as np
+import torchvision
 from torch import nn
 from sample import Sample
 from DataLoader import DataLoader
@@ -9,7 +11,8 @@ from model import Encoder, Decoder
 from torch.nn.utils.rnn import pack_padded_sequence
 from torch.utils.tensorboard import SummaryWriter
 from eval import evaluate
-from util import save_weights, print_output, load_weights
+from util import save_weights, print_output, load_weights, image_from_url, idx_to_sentence
+import matplotlib.pyplot as plt
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -19,6 +22,7 @@ def main(args):
 
     train_captions, train_feature, train_url, train_len = data.get_Training_data(args.training)
     test_captions, test_feature, test_url, test_len = data.get_val_data(args.testing)
+    f, c, _ = data.eval_data()
 
     writer = SummaryWriter()
 
@@ -32,14 +36,15 @@ def main(args):
         .to(device)
 
     if args.load_weight:
-        load_weights(encoder, args.model_path + "encoder")
-        load_weights(decoder, args.model_path + "decoder")
+        load_weights(encoder, args.model_path + "Jul28_10-04-57encoder")
+        load_weights(decoder, args.model_path + "Jul28_10-04-57decoder")
 
     for epoch in range(args.num_epochs):
         params = list(decoder.parameters()) + list(encoder.parameters())
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(params=params, lr=args.learning_rate)
 
+        # if epoch >= 100:
         training_loss = step(encoder=encoder,
                              decoder=decoder,
                              criterion=criterion,
@@ -55,7 +60,13 @@ def main(args):
                              criterion=criterion,
                              data=(test_captions, test_feature, test_len))
 
-        if (epoch % 5) == 0:
+        # if epoch > 1:
+        b1, b2, b3, b4 = evaluate(encoder, decoder, f, c, 5, data.word_to_idx, data.idx_to_word)
+        writer.add_scalars('BLEU', {'BLEU1': b1,
+                                    'BLEU2': b2,
+                                    'BLEU3': b3,
+                                    'BLEU4': b4 }, epoch + 1)
+        if (epoch % 30) == 0:
             save_weights(encoder, args.model_path + "encoder" + str(epoch))
             save_weights(decoder, args.model_path + "decoder" + str(epoch))
 
@@ -67,6 +78,9 @@ def main(args):
                       np.exp(training_loss), test_loss, np.exp(test_loss)))
 
         args.learning_rate *= 0.995
+        if args.save_weight:
+            save_weights(encoder, args.model_path + "encoder"+str(epoch))
+            save_weights(decoder, args.model_path + "decoder"+str(epoch))
 
     if args.save_weight:
         save_weights(encoder, args.model_path + "encoder")
@@ -87,20 +101,19 @@ def main(args):
         test_featur = test_featur.to(device)
         test_encoder_out = encoder(test_featur)
 
-        sample_train = sample.predict(train_feature[train_mask])
-        sample_test = sample.predict(test_feature[test_mask])
 
         train_output = []
         test_output = []
 
-        for i in range(args.numOfpredection):
-            # pre = sample.caption_image_beam_search(train_encoder_out[i].reshape(1, args.embed_size), data.word_to_idx, 2)
-            # train_output.append(pre)
+        for i in range(len(test_mask)):
+            print(i)
+            pre = sample.caption_image_beam_search(train_encoder_out[i].reshape(1, args.embed_size), data.word_to_idx, 2)
+            train_output.append(pre)
             pre = sample.caption_image_beam_search(test_encoder_out[i].reshape(1, args.embed_size), data.word_to_idx,
                                                    50)
             test_output.append(pre)
 
-        print_output(output=test_output, sample=sample_test,
+        print_output(output=test_output, sample=0,
                      gt=test_captions[test_mask],
                      img=test_url[test_mask],
                      title="val",
@@ -112,12 +125,12 @@ def main(args):
         print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
         print("")
 
-        # print_output(output=train_output, sample=sample_train,
-        #              gt=train_captions[train_mask],
-        #              img=train_url[train_mask],
-        #              title="traning",
-        #              show_image=args.show_image,
-        #              idx_to_word=data.idx_to_word)
+        print_output(output=train_output, sample=0,
+                     gt=train_captions[train_mask],
+                     img=train_url[train_mask],
+                     title="traning",
+                     show_image=args.show_image,
+                     idx_to_word=data.idx_to_word)
 
 
 def step(encoder, decoder, criterion, data, optimizer=None):
@@ -151,7 +164,7 @@ def step(encoder, decoder, criterion, data, optimizer=None):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if step + 1 % 500 == 0:
+            if step % 500 == 0:
                 print('step [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}'
                       .format(step + 1, numofstep, loss.item(),
                               np.exp(loss.item())))
@@ -164,27 +177,27 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, default='models/', help='path for saving trained models')
     parser.add_argument('--load_weight', type=bool, default=False, help='load the weights or not')
     parser.add_argument('--save_weight', type=bool, default=True, help='save the weights or not')
-    parser.add_argument('--predict', type=bool, default=True, help='predict random sample or not')
+    parser.add_argument('--predict', type=bool, default=False, help='predict random sample or not')
     parser.add_argument('--show_image', type=bool, default=True, help='num of image to predict')
-    parser.add_argument('--numOfpredection', type=int, default=250, help='num of image to predict')
+    parser.add_argument('--numOfpredection', type=int, default=50, help='num of image to predict')
 
     # Data
-    parser.add_argument('--PCA', type=bool, default=True, help='PCA the features or not')
+    parser.add_argument('--PCA', type=bool, default=False, help='PCA the features or not')
     parser.add_argument('--norm', type=bool, default=True, help='normalize the features or not')
     parser.add_argument('--training', type=int, default=None,
                         help='number of images to train on,if None mean all data')
     parser.add_argument('--testing', type=int, default=None, help='number of images to test on, if None mean all data')
 
     # Model parameters
-    parser.add_argument('--embed_size', type=int, default=400, help='dimension of word embedding vectors')
-    parser.add_argument('--hidden_size', type=int, default=400, help='dimension of lstm hidden states')
-    parser.add_argument('--attention_size', type=int, default=400, help='dimension of attention')
+    parser.add_argument('--embed_size', type=int, default=512, help='dimension of word embedding vectors')
+    parser.add_argument('--hidden_size', type=int, default=512, help='dimension of lstm hidden states')
+    parser.add_argument('--attention_size', type=int, default=512, help='dimension of attention')
 
     # Training parameters
     parser.add_argument('--num_epochs', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=240)
-    parser.add_argument('--learning_rate', type=float, default=1e-5)
-    parser.add_argument('--reg', type=float, default=8e-4)
+    parser.add_argument('--batch_size', type=int, default=3000)
+    parser.add_argument('--learning_rate', type=float, default=4e-4)
+    parser.add_argument('--reg', type=float, default=0)
     args = parser.parse_args()
     print(args)
     main(args)
