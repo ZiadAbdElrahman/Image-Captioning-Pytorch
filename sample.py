@@ -37,10 +37,10 @@ class Sample:
 
             gate = self.decoder.sigmoid(self.decoder.f_beta(h))  # gating scalar, (s, encoder_dim)
             awe = gate * awe
-            # inputs = torch.cat([awe, embeddings], dim=1)
-            inputs = embeddings
+            inputs = torch.cat([awe, embeddings], dim=1)
+            # inputs = embeddings
 
-            h, c = self.decoder.lstm(inputs, (awe, c))  # (s, decoder_dim)
+            h, c = self.decoder.lstm(inputs, (h, c))  # (s, decoder_dim)
 
             scores = self.decoder.linear(h)  # (s, vocab_size)
             scores = F.log_softmax(scores, dim=1)
@@ -93,7 +93,7 @@ class Sample:
 
         except:
             print("empty")
-            seq = 0
+            seq = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
         return seq
 
