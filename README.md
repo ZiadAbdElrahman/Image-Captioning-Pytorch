@@ -1,2 +1,8 @@
-# Image-Captioning-Pytorch-
-Image Captioning with attention 
+# Image-Captioning-Pytorch
+Image Captioning with attention
+
+# introdection 
+
+
+
+
