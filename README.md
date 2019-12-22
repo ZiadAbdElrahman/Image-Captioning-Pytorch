@@ -28,7 +28,7 @@ a person on a surfboard in the water
 
 [***Model Architecture***](https://github.com/ZiadAbdElrahman/Image-Captioning-Pytorch-#Model-Architecture)
 
-[***extra Examples***](https://github.com/ZiadAbdElrahman/Image-Captioning-Pytorch-#extra-Examples)
+[***Extra Examples***](https://github.com/ZiadAbdElrahman/Image-Captioning-Pytorch-#extra-Examples)
 
 
 # Dataset
